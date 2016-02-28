@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
     if (!*ip)
         strcpy(ip, "127.0.0.1");
     if (!*dir)
-        strcpy(dir, ".");
+        strcpy(dir, "/tmp");
 
     // WARNING! NO ERROR CHECKING BELOW!!!
 
@@ -117,6 +117,8 @@ void* handle_request(void *arg)
 
         // TODO: check extension/mimetype
 
+        //printf("GET: filename: \"%s\"\n", filename);
+
         // try to send the file...
         char buf[BUF_SIZE];
         memset(buf, 0, BUF_SIZE);
@@ -126,10 +128,13 @@ void* handle_request(void *arg)
             // OK, send file to the client
             sprintf(buf, "HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n");
             send(client, buf, strlen(buf), MSG_NOSIGNAL);
+
+            fgets(buf, BUF_SIZE, file);
             while (!feof(file))
             {
-                fgets(buf, BUF_SIZE, file);
+                //memset(buf, 0, BUF_SIZE);
                 send(client, buf, strlen(buf), MSG_NOSIGNAL);
+                fgets(buf, BUF_SIZE, file);
             }
             fclose(file);
         }
