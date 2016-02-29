@@ -37,9 +37,9 @@ int main(int argc, char *argv[])
 
     // WARNING! NO ERROR CHECKING BELOW!!!
 
-    // DEBUG
     // daemonize me
     daemon(1, 1); // do not change dir and do not close stdin, stdout and stderr
+    signal(SIGHUP, SIG_IGN);
     chdir(dir);
 
     int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
