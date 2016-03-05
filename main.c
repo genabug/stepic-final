@@ -7,8 +7,8 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -24,6 +24,10 @@ void* handle_request(void *arg);
 
 int main(int argc, char *argv[])
 {
+    // daemonize me
+    signal(SIGHUP, SIG_IGN);
+    daemon(1, 1); // do not change dir and do not close stdin, stdout and stderr
+
     // parsing the command line options (not very accurately but OK)
     char ip[OPT_MAX_SIZE], dir[OPT_MAX_SIZE];
     uint16_t port = 12345;
@@ -37,9 +41,6 @@ int main(int argc, char *argv[])
 
     // WARNING! NO ERROR CHECKING BELOW!!!
 
-    // daemonize me
-    daemon(1, 1); // do not change dir and do not close stdin, stdout and stderr
-    signal(SIGHUP, SIG_IGN);
     chdir(dir);
 
     int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -125,23 +126,27 @@ void* handle_request(void *arg)
         FILE *file = fopen(filename, "r");
         if (file)
         {
-            // OK, send file to the client
-            sprintf(buf, "HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n");
-            send(client, buf, strlen(buf), MSG_NOSIGNAL);
+            // read the file
+            fseek(file, 0, SEEK_END);
+            size_t sz = ftell(file);
+            fseek(file, 0, SEEK_SET);
+            char *content = (char *)malloc(sz + 1);
+            fread(content, sizeof(char), sz, file);
 
-            fgets(buf, BUF_SIZE, file);
-            while (!feof(file))
-            {
-                //memset(buf, 0, BUF_SIZE);
-                send(client, buf, strlen(buf), MSG_NOSIGNAL);
-                fgets(buf, BUF_SIZE, file);
-            }
+            // OK, send it to the client
+            sprintf(buf, "HTTP/1.0 200 OK\r\n"
+                         "Content-Type: text/html\r\n"
+                         "Content-Length: %lu\r\n\r\n", sz);
+            send(client, buf, strlen(buf), MSG_NOSIGNAL);
+            send(client, content, sz, MSG_NOSIGNAL);
             fclose(file);
         }
         else
         {
             // file not found
-            sprintf(buf, "HTTP/1.0 404 NOT FOUND\r\nContent-type: text/html\r\n\r\n");
+            sprintf(buf, "HTTP/1.0 404 NOT FOUND\r\n"
+                         "Content-Type: text/html\r\n"
+                         "Content-Length: %lu\r\n\r\n", 19 + strlen(filename));
             send(client, buf, strlen(buf), MSG_NOSIGNAL);
             sprintf(buf, "File \"%s\" not found!\n", filename);
             send(client, buf, strlen(buf), MSG_NOSIGNAL);
